@@ -15,3 +15,5 @@ wheels/
 # Node
 node_modules/
 frontend/dist/
+.langgraph_api/
+.claude/
