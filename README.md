@@ -1,13 +1,13 @@
 # LangSmith Deployments: Custom Route + React UI
 
-A demo showcasing **LangSmith Deployments custom routes** — a deep agent and a React chat UI served from a single deployment. The frontend is built with Vite and uses the `useStream` hook from `@langchain/langgraph-sdk/react` to communicate with the agent. Since both live on the same origin, no proxy or CORS configuration is needed.
+A demo showcasing **LangSmith Deployments custom routes** — a deep research agent and a React chat UI served from a single deployment. The frontend is built with Vite and uses the `useStream` hook from `@langchain/langgraph-sdk/react` to communicate with the agent. Since both live on the same origin, no proxy or CORS configuration is needed.
 
 ## How it works
 
 ```
 langgraph.json
-  ├── graphs.agent  →  src/agent/graph.py   (deep agent via create_deep_agent)
-  └── http.app      →  src/agent/app.py     (FastAPI app serving React at /app)
+  ├── graphs.agent  →  src/deep_research/agent.py  (deep agent via create_deep_agent)
+  └── http.app      →  src/app.py                   (FastAPI app serving React at /app)
 ```
 
 The LangGraph server handles the agent API (`/threads`, `/runs`, etc.) while the custom FastAPI app serves the built React frontend as static files at `/app/`. The React app talks to the agent API on the same origin — zero configuration.
@@ -15,16 +15,21 @@ The LangGraph server handles the agent API (`/threads`, `/runs`, etc.) while the
 ## Project structure
 
 ```
-├── src/agent/
-│   ├── graph.py           # Deep agent definition
-│   └── app.py             # FastAPI custom routes (serves frontend + /health)
+├── src/
+│   ├── app.py                        # FastAPI custom routes (serves frontend + /health)
+│   └── deep_research/
+│       ├── agent.py                  # Deep agent (create_deep_agent + Claude Sonnet 4.6)
+│       ├── utils.py                  # Message formatting utilities
+│       └── research_agent/
+│           ├── tools.py              # Tavily search + think_tool for reflection
+│           └── prompts.py            # System prompts for orchestrator & researcher
 ├── frontend/
-│   ├── src/App.tsx         # Chat UI (useStream, file viewer, todos, thread picker)
-│   ├── src/main.tsx        # React entry point
-│   └── src/index.css       # Tailwind v4 styles
-├── langgraph.json          # Deployment config
-├── pyproject.toml          # Python dependencies
-└── .env                    # API keys (gitignored)
+│   ├── src/App.tsx                   # Chat UI (useStream, file viewer, todos, thread picker)
+│   ├── src/main.tsx                  # React entry point
+│   └── src/index.css                 # Tailwind v4 styles
+├── langgraph.json                    # Deployment config
+├── pyproject.toml                    # Python dependencies
+└── .env.example                      # API keys template
 ```
 
 ## Features
@@ -63,8 +68,7 @@ cd ..
 ### 4. Run locally
 
 ```bash
-uv pip install "langgraph-cli[inmem]"
-uv run langgraph dev
+uv run langgraph dev --allow-blocking
 ```
 
 Open **http://localhost:2024/app/** in your browser.
@@ -75,12 +79,11 @@ This project deploys as-is to LangSmith Deployments. The `langgraph.json` config
 
 ```json
 {
-  "dependencies": ["."],
   "graphs": {
-    "agent": "./src/agent/graph.py:graph"
+    "agent": "./src/deep_research/agent.py:agent"
   },
   "http": {
-    "app": "./src/agent/app.py:app"
+    "app": "./src/app.py:app"
   },
   "env": ".env"
 }
@@ -100,7 +103,9 @@ After deploying, the chat UI is available at `https://<your-deployment>/app/`.
 
 | File | What it does |
 |------|-------------|
-| `src/agent/graph.py` | Creates the deep agent with `create_deep_agent` |
-| `src/agent/app.py` | FastAPI app: mounts React build at `/app`, adds `/health` |
+| `src/deep_research/agent.py` | Creates the deep agent with `create_deep_agent` and Claude Sonnet 4.6 |
+| `src/deep_research/research_agent/tools.py` | Tavily web search + think tool for strategic reflection |
+| `src/deep_research/research_agent/prompts.py` | System prompts for orchestrator and researcher agents |
+| `src/app.py` | FastAPI app: mounts React build at `/app`, adds `/health` |
 | `langgraph.json` | Wires the agent + custom routes for deployment |
-| `frontend/src/App.tsx` | The entire chat UI in one file (~500 lines) |
+| `frontend/src/App.tsx` | The entire chat UI in one file |
