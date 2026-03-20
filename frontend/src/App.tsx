@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, type FC } from "react";
 import { createPortal } from "react-dom";
-import { useStream } from "@langchain/langgraph-sdk/react";
+import { useStream, type SubagentStreamInterface, type SubagentStatus, type UseDeepAgentStream } from "@langchain/langgraph-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -19,6 +19,158 @@ function getTextContent(content: unknown): string {
 function extOf(path: string): string {
   return path.split(".").pop()?.toLowerCase() ?? "";
 }
+
+function getImageBlocks(content: unknown): { url: string }[] {
+  if (!Array.isArray(content)) return [];
+  return content
+    .filter((c: any) => c.type === "image_url" || c.type === "image")
+    .map((c: any) => ({
+      url: c.image_url?.url ?? c.source?.data ?? c.url ?? "",
+    }))
+    .filter((img) => img.url);
+}
+
+function getElapsedTime(startedAt: Date | null, completedAt: Date | null): string | null {
+  if (!startedAt) return null;
+  const end = completedAt ?? new Date();
+  const seconds = Math.round((end.getTime() - startedAt.getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+// ── Subagent Status Helpers ─────────────────────────────────────────────────
+
+const StatusIcon: FC<{ status: SubagentStatus }> = ({ status }) => {
+  switch (status) {
+    case "pending":
+      return <span className="text-gray-400"><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg></span>;
+    case "running":
+      return <span className="animate-spin text-blue-500"><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span>;
+    case "complete":
+      return <span className="text-emerald-500"><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg></span>;
+    case "error":
+      return <span className="text-red-500"><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg></span>;
+  }
+};
+
+const StatusBadge: FC<{ status: SubagentStatus }> = ({ status }) => {
+  const styles: Record<SubagentStatus, string> = {
+    pending: "bg-gray-100 text-gray-600",
+    running: "bg-blue-100 text-blue-700",
+    complete: "bg-emerald-100 text-emerald-700",
+    error: "bg-red-100 text-red-700",
+  };
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[status]}`}>
+      {status}
+    </span>
+  );
+};
+
+// ── SubagentCard ────────────────────────────────────────────────────────────
+
+const SubagentCard: FC<{
+  subagent: SubagentStreamInterface;
+  autoCollapse?: boolean;
+}> = ({ subagent, autoCollapse = false }) => {
+  const [expanded, setExpanded] = useState(!autoCollapse || subagent.status === "running");
+  const title = subagent.toolCall?.args?.subagent_type ?? `Agent ${subagent.id.slice(0, 8)}`;
+  const description = subagent.toolCall?.args?.description ?? "";
+  const elapsed = getElapsedTime(subagent.startedAt, subagent.completedAt);
+
+  const lastAIMessage = subagent.messages
+    .filter((m: any) => m.type === "ai")
+    .at(-1);
+
+  const displayContent =
+    subagent.status === "complete"
+      ? subagent.result
+      : lastAIMessage
+        ? getTextContent((lastAIMessage as any).content)
+        : "";
+
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-white shadow-sm overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-[var(--muted)]/30"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <StatusIcon status={subagent.status} />
+          <div className="min-w-0">
+            <h4 className="text-xs font-semibold capitalize truncate">{title}</h4>
+            {description && (
+              <p className="text-[11px] text-[var(--muted-foreground)] truncate">{description}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {elapsed && <span className="text-[10px] text-[var(--muted-foreground)]">{elapsed}</span>}
+          <StatusBadge status={subagent.status} />
+          <svg
+            className={`h-3 w-3 text-[var(--muted-foreground)] transition-transform ${expanded ? "rotate-180" : ""}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </div>
+      </button>
+      {expanded && displayContent && (
+        <div className="border-t border-[var(--border)] px-3 py-2.5">
+          <div className="prose prose-sm max-w-none text-xs leading-relaxed line-clamp-6">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
+            {subagent.status === "running" && (
+              <span className="inline-block h-3.5 w-0.5 animate-pulse bg-blue-500 ml-0.5 align-middle" />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── SubagentProgress ────────────────────────────────────────────────────────
+
+const SubagentProgress: FC<{ subagents: SubagentStreamInterface[] }> = ({ subagents }) => {
+  const completed = subagents.filter((s) => s.status === "complete").length;
+  const total = subagents.length;
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[10px] text-[var(--muted-foreground)]">
+        <span>Subagent progress</span>
+        <span>{completed}/{total} complete</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-gray-200">
+        <div
+          className="h-full rounded-full bg-blue-500 transition-all duration-300"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ── SynthesisIndicator ──────────────────────────────────────────────────────
+
+const SynthesisIndicator: FC<{
+  subagents: SubagentStreamInterface[];
+  isLoading: boolean;
+}> = ({ subagents, isLoading }) => {
+  const allDone =
+    subagents.length > 0 &&
+    subagents.every((s) => s.status === "complete" || s.status === "error");
+
+  if (!allDone || !isLoading) return null;
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-xs text-purple-700">
+      <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      Synthesizing results from {subagents.length} subagent{subagents.length !== 1 ? "s" : ""}...
+    </div>
+  );
+};
 
 // ── File Viewer Dialog ───────────────────────────────────────────────────────
 
@@ -300,21 +452,25 @@ export default function App() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const stream = useStream<{
+  type AgentState = {
     messages: any[];
     files?: Record<string, string>;
     todos?: any[];
-  }>({
+  };
+
+  const stream = useStream<AgentState>({
     apiUrl: window.location.origin,
     assistantId: "agent",
     messagesKey: "messages",
     threadId,
-    onThreadId: (id) => setThreadId(id),
-  });
+    onThreadId: (id: string) => setThreadId(id),
+    filterSubagentMessages: true,
+  } as any) as unknown as UseDeepAgentStream<AgentState>;
 
   const { messages, isLoading, error, values } = stream;
   const files = values?.files ?? {};
   const todos = values?.todos ?? [];
+  const allSubagents = [...(stream.subagents?.values?.() ?? [])];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -325,7 +481,10 @@ export default function App() {
     const text = input.trim();
     if (!text || isLoading) return;
     setInput("");
-    stream.submit({ messages: [{ type: "human", content: text }] });
+    (stream as any).submit(
+      { messages: [{ type: "human", content: text }] },
+      { streamSubgraphs: true },
+    );
   };
 
   return (
@@ -376,9 +535,16 @@ export default function App() {
               );
             }
 
-            // AI messages — render text + tool calls via getToolCalls()
+            // AI messages — render text + tool calls + subagent cards + images
             if (msgType === "ai") {
               const toolCalls = (stream as any).getToolCalls(msg) as any[];
+              const msgSubagents = stream.getSubagentsByMessage?.(m.id) ?? [];
+              const subagentToolCallIds = new Set(msgSubagents.map((s) => s.id));
+              const nonSubagentToolCalls = toolCalls.filter(
+                (tc: any) => !subagentToolCallIds.has(tc.id ?? (tc.call ?? tc).id),
+              );
+              const imageBlocks = getImageBlocks(m.content);
+              const hasSubagents = msgSubagents.length > 0;
 
               return (
                 <div key={msg.id ?? idx} className="flex flex-col items-start gap-2">
@@ -389,7 +555,7 @@ export default function App() {
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                       </div>
                     </div>
-                  ) : !toolCalls.length ? (
+                  ) : !toolCalls.length && !hasSubagents ? (
                     <div className="rounded-2xl bg-[var(--muted)] px-4 py-2.5 text-sm text-[var(--muted-foreground)]">
                       <span className="inline-flex items-center gap-1">
                         <span className="animate-pulse">●</span>
@@ -399,8 +565,33 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  {/* Tool calls from this AI message */}
-                  {toolCalls.map((tc: any) => {
+                  {/* Image blocks */}
+                  {imageBlocks.map((img, i) => (
+                    <div key={`img-${i}`} className="max-w-[80%] overflow-hidden rounded-xl border border-[var(--border)]">
+                      <img
+                        src={img.url.startsWith("data:") ? img.url : img.url}
+                        alt="Generated content"
+                        className="max-h-96 w-auto object-contain"
+                      />
+                    </div>
+                  ))}
+
+                  {/* Subagent cards section */}
+                  {hasSubagents && (
+                    <div className="w-full max-w-[90%] space-y-2 border-l-2 border-blue-200 pl-3">
+                      <SubagentProgress subagents={msgSubagents} />
+                      {msgSubagents.map((sub) => (
+                        <SubagentCard
+                          key={sub.id}
+                          subagent={sub}
+                          autoCollapse={msgSubagents.length >= 5 && sub.status === "complete"}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Non-subagent tool calls */}
+                  {nonSubagentToolCalls.map((tc: any) => {
                     const call = tc.call ?? tc;
                     const isPending = tc.state === "pending";
                     const isError = tc.state === "error";
@@ -413,7 +604,6 @@ export default function App() {
 
                     return (
                       <div key={tc.id ?? call.id} className="max-w-[80%] rounded-xl border border-[var(--border)] bg-white text-xs">
-                        {/* Header: icon + name + status */}
                         <div className="flex items-center gap-2 px-3 py-2 text-[var(--muted-foreground)]">
                           {isPending ? (
                             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-amber-100 text-amber-700">
@@ -432,14 +622,12 @@ export default function App() {
                           <span className="ml-auto">{isPending ? "running..." : isError ? "error" : ""}</span>
                         </div>
 
-                        {/* Args (shown while pending so user sees what's happening) */}
                         {isPending && argsStr && argsStr !== "{}" && (
                           <pre className="border-t border-[var(--border)] px-3 py-2 max-h-24 overflow-auto whitespace-pre-wrap text-[var(--muted-foreground)]">
                             {argsStr.slice(0, 300)}{argsStr.length > 300 ? "..." : ""}
                           </pre>
                         )}
 
-                        {/* Result (shown when completed) */}
                         {resultStr && (
                           <pre className="border-t border-[var(--border)] px-3 py-2 max-h-32 overflow-auto whitespace-pre-wrap text-[var(--muted-foreground)]">
                             {resultStr.slice(0, 500)}{resultStr.length > 500 ? "..." : ""}
@@ -466,6 +654,9 @@ export default function App() {
             return null;
           })}
 
+          {/* Synthesis indicator when all subagents done but still loading */}
+          <SynthesisIndicator subagents={allSubagents} isLoading={isLoading} />
+
           {error != null && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               Error: {String((error as any)?.message ?? error)}
@@ -485,7 +676,11 @@ export default function App() {
         <form onSubmit={handleSubmit} className="mx-auto flex max-w-2xl items-end gap-2">
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -495,7 +690,7 @@ export default function App() {
             placeholder="Send a message..."
             rows={1}
             autoFocus
-            className="min-h-[44px] flex-1 resize-none rounded-xl border border-[var(--input-border)] bg-[var(--background)] px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--input-focus)] focus:ring-1 focus:ring-[var(--input-focus)]"
+            className="min-h-[44px] max-h-[200px] flex-1 resize-none rounded-xl border border-[var(--input-border)] bg-[var(--background)] px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--input-focus)] focus:ring-1 focus:ring-[var(--input-focus)]"
           />
           <button
             type={isLoading ? "button" : "submit"}

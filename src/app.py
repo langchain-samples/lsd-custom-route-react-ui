@@ -8,7 +8,7 @@ app = FastAPI()
 
 # Resolve to absolute path so it works regardless of CWD
 FRONTEND_BUILD_DIR = (
-    pathlib.Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    pathlib.Path(__file__).resolve().parent.parent / "frontend" / "dist"
 )
 
 
