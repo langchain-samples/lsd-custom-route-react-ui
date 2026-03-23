@@ -1,111 +1,165 @@
-# LangSmith Deployments: Custom Route + React UI
+# LangSmith Deployments: Custom Routes Demo
 
-A demo showcasing **LangSmith Deployments custom routes** — a deep research agent and a React chat UI served from a single deployment. The frontend is built with Vite and uses the `useStream` hook from `@langchain/langgraph-sdk/react` to communicate with the agent. Since both live on the same origin, no proxy or CORS configuration is needed.
+A demo showing how to use **custom routes** in [LangSmith Deployments](https://docs.smith.langchain.com/) to serve a full-stack application from a single deployment. The LangSmith agent server gives you standard endpoints for threads, runs, and assistants out of the box — custom routes let you layer your own HTTP endpoints, static file serving, and authentication on top.
 
-## How it works
+This project pairs a React chat UI with a LangGraph deep research agent, all deployed together. Use it as a starting point for building your own custom frontend on LangSmith Deployments.
 
-```
-langgraph.json
-  ├── graphs.agent  →  src/deep_research/agent.py  (deep agent via create_deep_agent)
-  └── http.app      →  src/app.py                   (FastAPI app serving React at /app)
-```
+## What This Demonstrates
 
-The LangGraph server handles the agent API (`/threads`, `/runs`, etc.) while the custom FastAPI app serves the built React frontend as static files at `/app/`. The React app talks to the agent API on the same origin — zero configuration.
+- **Custom HTTP routes** — FastAPI app mounted alongside the agent server, serving a frontend at `/app/`
+- **Custom auth** — Supabase JWT validation integrated with LangGraph's auth system to scope resources per user
+- **Deep agent with subagents** — streaming research agent that delegates to parallel subagents
+- **Frontend consuming the agent server** — the React app talks directly to the same origin's `/threads`, `/runs`, and `/assistants` endpoints
 
-## Project structure
+## How Custom Routes Work
 
-```
-├── src/
-│   ├── app.py                        # FastAPI custom routes (serves frontend + /health)
-│   └── deep_research/
-│       ├── agent.py                  # Deep agent (create_deep_agent + Claude Sonnet 4.6)
-│       ├── utils.py                  # Message formatting utilities
-│       └── research_agent/
-│           ├── tools.py              # Tavily search + think_tool for reflection
-│           └── prompts.py            # System prompts for orchestrator & researcher
-├── frontend/
-│   ├── src/App.tsx                   # Chat UI (useStream, file viewer, todos, thread picker)
-│   ├── src/main.tsx                  # React entry point
-│   └── src/index.css                 # Tailwind v4 styles
-├── langgraph.json                    # Deployment config
-├── pyproject.toml                    # Python dependencies
-└── .env.example                      # API keys template
+LangSmith Deployments run a LangGraph agent server that exposes endpoints for managing threads, runs, and assistants. The `langgraph.json` config lets you extend this server with:
+
+| Config Key | What It Does |
+|------------|-------------|
+| `graphs` | Register your LangGraph agent(s) |
+| `auth.path` | Plug in custom authentication (validates tokens, scopes resources) |
+| `http.app` | Mount a FastAPI/Starlette app for your own routes (serve a frontend, add APIs, etc.) |
+
+```json
+{
+  "graphs": { "agent": "./src/deep_research/agent.py:agent" },
+  "auth":   { "path": "./src/auth.py:auth" },
+  "http":   { "app": "./src/app.py:app" },
+  "env":    ".env"
+}
 ```
 
-## Features
+In this demo:
+- `src/app.py` serves the built React frontend as static files at `/app/`
+- `src/auth.py` validates Supabase bearer tokens and scopes all LangGraph resources (threads, runs) to the authenticated user
+- The frontend calls the standard agent server endpoints (`/threads`, `/runs`, `/assistants`) — no custom API needed for the chat itself
 
-- **Streaming chat** — token-by-token AI responses via `useStream`
-- **Tool call visibility** — see tool name + args while running, result when done
-- **File system panel** — browse files the agent creates, with viewer/copy/download
-- **Agent tasks** — live todo list showing what the agent is working on
-- **Thread management** — switch between conversations, start new threads
-- **Stop button** — cancel a running stream mid-response
+## Prerequisites
 
-## Quickstart
+- **Python 3.11+**
+- **Node.js 20+**
+- **[uv](https://docs.astral.sh/uv/)** — Python package manager
+- **Supabase project** — [create one for free](https://supabase.com/dashboard)
+- **API keys**: [Anthropic](https://console.anthropic.com/), [Tavily](https://tavily.com/)
 
-### 1. Set up environment
+## Getting Started
+
+### 1. Clone the repo
+
+```bash
+git clone <your-repo-url>
+cd lsd-react-ui-cr
+```
+
+### 2. Set up environment variables
+
+**Backend** (`.env`):
 
 ```bash
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY and optionally LANGSMITH_API_KEY
 ```
 
-### 2. Install Python dependencies
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `TAVILY_API_KEY` | Your Tavily search API key |
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key (backend only) |
+| `LANGSMITH_API_KEY` | *(optional)* Enable LangSmith tracing |
+| `LANGSMITH_PROJECT` | *(optional)* LangSmith project name |
+| `LANGSMITH_TRACING` | *(optional)* Set to `true` to enable tracing |
+
+**Frontend** (`frontend/.env`):
+
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key |
+
+### 3. Install dependencies
 
 ```bash
 uv sync
+cd frontend && npm install && cd ..
 ```
 
-### 3. Build the frontend
+### 4. Build the frontend
 
 ```bash
-cd frontend
-npm install
-npm run build
-cd ..
+cd frontend && npm run build && cd ..
 ```
 
-### 4. Run locally
+### 5. Run locally
 
 ```bash
 uv run langgraph dev --allow-blocking
 ```
 
-Open **http://localhost:2024/app/** in your browser.
+Open **http://localhost:2024/app/**
 
-## Deploy to LangSmith
+## Authentication Flow
 
-This project deploys as-is to LangSmith Deployments. The `langgraph.json` config tells the platform about both the agent graph and the custom HTTP app:
+This demo shows how custom auth integrates with the agent server:
 
-```json
-{
-  "graphs": {
-    "agent": "./src/deep_research/agent.py:agent"
-  },
-  "http": {
-    "app": "./src/app.py:app"
-  },
-  "env": ".env"
-}
+1. User signs in via Supabase Auth on the frontend
+2. The frontend sends the session token as `Authorization: Bearer <token>` with every request
+3. `src/auth.py` validates the token against Supabase and extracts the user identity
+4. LangGraph resources (threads, runs) are automatically scoped to the authenticated user via metadata filters
+5. Users can only access their own conversations
+
+The key insight: you write one auth handler and it applies to **all** agent server endpoints — threads, runs, assistants, and your custom routes.
+
+## Customization
+
+### Swapping the Agent
+
+Update the graph path in `langgraph.json`. You can also change which assistant the frontend connects to at runtime via the **Settings** gear icon in the header.
+
+### Theming
+
+Colors are CSS custom properties in `frontend/src/index.css` — change `--accent`, `--background`, `--border`, etc.
+
+## Project Structure
+
+```text
+├── langgraph.json                     # Deployment config (graphs, auth, http, env)
+├── src/
+│   ├── app.py                         # Custom HTTP routes (serves frontend)
+│   ├── auth.py                        # Custom auth (Supabase JWT validation)
+│   └── deep_research/
+│       ├── agent.py                   # Deep research agent definition
+│       └── research_agent/
+│           ├── prompts.py             # System prompts
+│           └── tools.py              # tavily_search, think_tool
+│
+├── frontend/src/
+│   ├── App.tsx                        # Main app with auth + streaming
+│   ├── Auth.tsx                       # Supabase sign in/up
+│   └── components/
+│       ├── MessageList.tsx            # Chat messages
+│       ├── ToolCallCard.tsx           # Tool call display with rich renderers
+│       ├── SubagentActivity.tsx       # Subagent pipeline visualization
+│       ├── SettingsModal.tsx          # Assistant ID configuration
+│       └── toolcalls/                 # Rich renderers for deep agent tools
+│
+└── .env.example                       # Environment template
 ```
 
-After deploying, the chat UI is available at `https://<your-deployment>/app/`.
+## Stack
 
-## Frontend tech
+| Layer | Technology |
+|-------|-----------|
+| Agent | `deepagents`, `langchain-anthropic`, `langchain-tavily` |
+| Server | LangSmith Deployments agent server, FastAPI (custom routes) |
+| Frontend | React 19, TypeScript, Vite 6, Tailwind CSS v4 |
+| Streaming | `@langchain/langgraph-sdk`, `streamdown` |
+| Auth | Supabase (frontend + backend JWT validation) |
 
-- **Vite** + **React 19** + **TypeScript**
-- **Tailwind CSS v4** via `@tailwindcss/postcss`
-- **`useStream`** from `@langchain/langgraph-sdk/react` — handles thread creation, streaming, messages, tool calls, and state
-- **`react-markdown`** + `remark-gfm` for rendering assistant responses
-- No framework (Next.js, etc.) — just a static SPA served via FastAPI `StaticFiles`
+## License
 
-## Key files
-
-| File | What it does |
-|------|-------------|
-| `src/deep_research/agent.py` | Creates the deep agent with `create_deep_agent` and Claude Sonnet 4.6 |
-| `src/deep_research/research_agent/tools.py` | Tavily web search + think tool for strategic reflection |
-| `src/deep_research/research_agent/prompts.py` | System prompts for orchestrator and researcher agents |
-| `src/app.py` | FastAPI app: mounts React build at `/app`, adds `/health` |
-| `langgraph.json` | Wires the agent + custom routes for deployment |
-| `frontend/src/App.tsx` | The entire chat UI in one file |
+MIT

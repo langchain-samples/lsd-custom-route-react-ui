@@ -6,15 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
     "@langchain/core": "^1.1.24",
     "@langchain/langgraph-sdk": "^1.7.2",
+    "@supabase/supabase-js": "^2.99.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "streamdown": "^2.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
