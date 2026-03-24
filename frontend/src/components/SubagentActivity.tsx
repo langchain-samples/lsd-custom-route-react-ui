@@ -1,10 +1,8 @@
-import { useState, type FC } from "react";
+import { useEffect, useRef, useState, type FC } from "react";
 import { Streamdown } from "streamdown";
-import type {
-  SubagentStatus,
-  SubagentStreamInterface,
-} from "@langchain/langgraph-sdk/react";
-import { getElapsedTime, getTextContent, isAgentAiMessage } from "../lib/stream";
+import type { SubagentStatus } from "@langchain/react";
+import type { AgentSubagent } from "../types";
+import { getElapsedTime, getTextContent } from "../lib/stream";
 
 const StatusIcon: FC<{ status: SubagentStatus }> = ({ status }) => {
   switch (status) {
@@ -61,12 +59,13 @@ const StatusBadge: FC<{ status: SubagentStatus }> = ({ status }) => {
 };
 
 const SubagentCard: FC<{
-  subagent: SubagentStreamInterface;
+  subagent: AgentSubagent;
   autoCollapse?: boolean;
 }> = ({ subagent, autoCollapse = false }) => {
   const [expanded, setExpanded] = useState(
     !autoCollapse || subagent.status === "running",
   );
+  const scrollRef = useRef<HTMLDivElement>(null);
   const typeName =
     typeof subagent.toolCall.args.subagent_type === "string"
       ? subagent.toolCall.args.subagent_type
@@ -77,13 +76,19 @@ const SubagentCard: FC<{
       : "";
   const title = typeName ?? `Agent ${subagent.id.slice(0, 8)}`;
   const elapsed = getElapsedTime(subagent.startedAt, subagent.completedAt);
-  const lastAIMessage = subagent.messages.filter(isAgentAiMessage).at(-1);
+  const lastAIMessage = subagent.messages.filter((m) => m.type === "ai").at(-1);
+  const isStreaming = subagent.status === "running";
   const displayContent =
     subagent.status === "complete"
       ? subagent.result ?? ""
       : lastAIMessage
         ? getTextContent(lastAIMessage.content)
         : "";
+
+  useEffect(() => {
+    if (!isStreaming || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [displayContent, isStreaming]);
 
   return (
     <div className="anim-fade-in overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-sm">
@@ -124,11 +129,12 @@ const SubagentCard: FC<{
       </button>
       {expanded && displayContent && (
         <div className="border-t border-[var(--border)] px-3 py-2.5">
-          <div className="prose prose-sm max-w-none text-xs leading-relaxed line-clamp-6">
-            <Streamdown mode="static">{displayContent}</Streamdown>
-            {subagent.status === "running" && (
-              <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-[var(--accent)] align-middle" />
-            )}
+          <div ref={scrollRef} className="max-h-64 overflow-y-auto">
+            <div className="markdown-body prose prose-sm max-w-none text-xs leading-relaxed">
+              <Streamdown animated isAnimating={isStreaming} parseIncompleteMarkdown>
+                {displayContent}
+              </Streamdown>
+            </div>
           </div>
         </div>
       )}
@@ -136,7 +142,7 @@ const SubagentCard: FC<{
   );
 };
 
-const SubagentProgress: FC<{ subagents: SubagentStreamInterface[] }> = ({
+const SubagentProgress: FC<{ subagents: AgentSubagent[] }> = ({
   subagents,
 }) => {
   const completed = subagents.filter((subagent) => subagent.status === "complete").length;
@@ -162,7 +168,7 @@ const SubagentProgress: FC<{ subagents: SubagentStreamInterface[] }> = ({
 };
 
 export const SynthesisIndicator: FC<{
-  subagents: SubagentStreamInterface[];
+  subagents: AgentSubagent[];
   isLoading: boolean;
 }> = ({ subagents, isLoading }) => {
   const allDone =
@@ -185,7 +191,7 @@ export const SynthesisIndicator: FC<{
   );
 };
 
-export const SubagentPipeline: FC<{ subagents: SubagentStreamInterface[] }> = ({
+export const SubagentPipeline: FC<{ subagents: AgentSubagent[] }> = ({
   subagents,
 }) => {
   if (subagents.length === 0) return null;

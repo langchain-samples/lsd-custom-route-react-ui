@@ -1,13 +1,6 @@
-import { useStream, type UseDeepAgentStreamOptions } from "@langchain/langgraph-sdk/react";
-import type {
-  AgentAIMessage,
-  AgentMessage,
-  AgentStream,
-  AgentState,
-  AgentToolCall,
-  ContentBlock,
-  ImageBlock,
-} from "../types";
+import { useStream, type UseDeepAgentStreamOptions, type UseStream } from "@langchain/react";
+import type { DefaultToolCall } from "@langchain/langgraph-sdk";
+import type { AgentState } from "../types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -19,7 +12,7 @@ function isTextBlock(block: unknown): block is { type: "text"; text: string } {
 
 function isImageContentBlock(
   block: unknown,
-): block is ContentBlock & {
+): block is {
   type: "image" | "image_url";
   image_url?: string | { url: string };
   source?: { data?: string };
@@ -49,17 +42,10 @@ function getImageUrl(block: {
 
 export function useAgentStream(
   options: UseDeepAgentStreamOptions<AgentState>,
-): AgentStream {
-  return useStream<AgentState>(options) as unknown as AgentStream;
+): UseStream<AgentState> {
+  return useStream<AgentState>(options) as unknown as UseStream<AgentState>;
 }
 
-export function isAgentAiMessage(message: AgentMessage): message is AgentAIMessage {
-  return message.type === "ai";
-}
-
-export function isHumanMessage(message: AgentMessage): boolean {
-  return message.type === "human";
-}
 
 export function getTextContent(content: unknown): string {
   if (typeof content === "string") return content;
@@ -71,7 +57,7 @@ export function getTextContent(content: unknown): string {
     .join("");
 }
 
-export function getImageBlocks(content: unknown): ImageBlock[] {
+export function getImageBlocks(content: unknown): { url: string }[] {
   if (!Array.isArray(content)) return [];
 
   return content
@@ -140,7 +126,7 @@ export function getErrorMessage(
   return fallback;
 }
 
-export function getToolSummary(args: AgentToolCall["args"] | string | undefined): string {
+export function getToolSummary(args: DefaultToolCall["args"] | string | undefined): string {
   if (typeof args === "string") return args.slice(0, 60);
   if (!isRecord(args)) return "";
 

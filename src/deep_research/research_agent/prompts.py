@@ -74,7 +74,7 @@ You can call these tools in series or in parallel, your research is conducted in
 
 <Available Research Tools>
 You have access to two specific research tools:
-1. **tavily_search**: For conducting web searches to gather information
+1. **web_search**: For conducting web searches to gather information
 2. **think_tool**: For reflection and strategic planning during research
 **CRITICAL: Use think_tool after each search to reflect on results and plan next steps**
 </Available Research Tools>

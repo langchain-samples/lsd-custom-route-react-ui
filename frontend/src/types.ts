@@ -1,21 +1,12 @@
+import type { UseStream } from "@langchain/react";
 import type {
-  AIMessage,
   DefaultToolCall,
-  HumanMessage,
   Message,
   Thread,
-  ToolCallWithResult,
-  ToolMessage,
+  ToolCallWithResult as SdkToolCallWithResult,
 } from "@langchain/langgraph-sdk";
-import type { UseStream } from "@langchain/langgraph-sdk/react";
+import type { SubagentStreamInterface } from "@langchain/langgraph-sdk/ui";
 
-export type AgentMessage = Message<DefaultToolCall>;
-export type AgentAIMessage = AIMessage<DefaultToolCall>;
-export type AgentHumanMessage = HumanMessage;
-export type AgentToolMessage = ToolMessage;
-export type AgentToolCall = DefaultToolCall;
-export type AgentToolCallResult = ToolCallWithResult<DefaultToolCall>;
-export type AgentFileMap = Record<string, unknown>;
 export type TodoStatus = "pending" | "in_progress" | "completed" | string;
 
 export interface TodoItem {
@@ -25,15 +16,12 @@ export interface TodoItem {
 }
 
 export interface AgentState extends Record<string, unknown> {
-  messages: AgentMessage[];
-  files?: AgentFileMap;
+  messages: Message<DefaultToolCall>[];
+  files?: Record<string, unknown>;
   todos?: TodoItem[];
 }
 
 export type AgentStream = UseStream<AgentState>;
+export type AgentSubagent = SubagentStreamInterface;
+export type AgentToolCallResult = SdkToolCallWithResult<DefaultToolCall>;
 export type ThreadSummary = Thread<AgentState>;
-export type ContentBlock = Extract<AgentMessage["content"], Array<unknown>>[number];
-
-export interface ImageBlock {
-  url: string;
-}

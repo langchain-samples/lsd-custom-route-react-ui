@@ -70,7 +70,7 @@ const ThreadPicker: FC<ThreadPickerProps> = ({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="anim-slide-down absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-[var(--border)] bg-white shadow-lg">
+          <div className="anim-slide-down absolute right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-white shadow-lg sm:w-72">
             <div className="border-b border-[var(--border)] px-3 py-2">
               <button
                 onClick={() => {

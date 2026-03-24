@@ -19,7 +19,7 @@ from research_agent.prompts import (
     RESEARCH_WORKFLOW_INSTRUCTIONS,
     SUBAGENT_DELEGATION_INSTRUCTIONS,
 )
-from research_agent.tools import tavily_search, think_tool
+from research_agent.tools import think_tool, web_search_tool
 
 # Limits
 max_concurrent_research_units = 3
@@ -45,19 +45,16 @@ research_sub_agent = {
     "name": "research-agent",
     "description": "Delegate research to the sub-agent researcher. Only give this researcher one topic at a time.",
     "system_prompt": RESEARCHER_INSTRUCTIONS.format(date=current_date),
-    "tools": [tavily_search, think_tool],
+    "tools": [web_search_tool, think_tool],
 }
 
-# Model Gemini 3 
-# model = ChatGoogleGenerativeAI(model="gemini-3-pro-preview", temperature=0.0)
-
-# Model Claude 4.5
-model = init_chat_model(model="anthropic:claude-sonnet-4-6")
+# Model Claude Sonnet 4.6
+model = init_chat_model(model="anthropic:claude-haiku-4-5")
 
 # Create the agent
 agent = create_deep_agent(
     model=model,
-    tools=[tavily_search, think_tool],
+    tools=[web_search_tool, think_tool],
     system_prompt=INSTRUCTIONS,
     subagents=[research_sub_agent],
 )

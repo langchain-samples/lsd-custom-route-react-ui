@@ -2,7 +2,6 @@ import { useCallback, useState, type FC } from "react";
 import { createPortal } from "react-dom";
 import { Streamdown } from "streamdown";
 import { extOf, parseDisplayContent } from "../lib/stream";
-import type { AgentFileMap } from "../types";
 
 const FileViewDialog: FC<{
   fileName: string;
@@ -97,7 +96,7 @@ const FileViewDialog: FC<{
   );
 };
 
-const FilesPanel: FC<{ files: AgentFileMap }> = ({ files }) => {
+const FilesPanel: FC<{ files: Record<string, unknown> }> = ({ files }) => {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const fileNames = Object.keys(files);
 

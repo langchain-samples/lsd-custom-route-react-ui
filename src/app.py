@@ -1,8 +1,15 @@
 import pathlib
+import sys
 
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+# Ensure sibling modules are importable
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from auth import create_user, login_user
 
 app = FastAPI()
 
@@ -12,9 +19,34 @@ FRONTEND_BUILD_DIR = (
 )
 
 
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/auth/signup")
+def signup(body: AuthRequest):
+    try:
+        return create_user(body.email, body.password)
+    except ValueError as e:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/auth/login")
+def login(body: AuthRequest):
+    try:
+        return login_user(body.email, body.password)
+    except ValueError as e:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse({"error": str(e)}, status_code=401)
 
 
 @app.get("/app")

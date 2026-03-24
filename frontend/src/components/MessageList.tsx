@@ -5,10 +5,8 @@ import {
   getErrorMessage,
   getImageBlocks,
   getTextContent,
-  isAgentAiMessage,
-  isHumanMessage,
 } from "../lib/stream";
-import type { AgentMessage, AgentStream } from "../types";
+import type { AgentStream } from "../types";
 import { SubagentPipeline, SynthesisIndicator } from "./SubagentActivity";
 import ToolCallCard from "./ToolCallCard";
 
@@ -17,7 +15,7 @@ type MessageListProps = {
   error: unknown;
   isLoading: boolean;
   mainRef: RefObject<HTMLDivElement | null>;
-  messages: AgentMessage[];
+  messages: AgentStream["messages"];
   onScroll: () => void;
   onSuggestionSelect: (prompt: string) => void;
   stream: AgentStream;
@@ -45,7 +43,7 @@ const MessageList: FC<MessageListProps> = ({
     <main
       ref={mainRef}
       onScroll={onScroll}
-      className="flex-1 overflow-y-auto px-4 py-6"
+      className="flex-1 overflow-y-auto px-2 py-4 sm:px-4 sm:py-6"
     >
       <div className="mx-auto max-w-4xl space-y-3">
         {messages.length === 0 && !isLoading && (
@@ -80,7 +78,7 @@ const MessageList: FC<MessageListProps> = ({
           const content = getTextContent(message.content);
           const isLastMessage = index === messages.length - 1;
 
-          if (isHumanMessage(message)) {
+          if (message.getType() === "human") {
             return (
               <div key={message.id ?? index} className="anim-msg flex justify-end">
                 <div className="max-w-[90%] rounded-2xl rounded-br-sm bg-[var(--primary)] px-4 py-2.5 text-sm leading-relaxed text-[var(--primary-foreground)]">
@@ -90,8 +88,8 @@ const MessageList: FC<MessageListProps> = ({
             );
           }
 
-          if (isAgentAiMessage(message)) {
-            const toolCalls = stream.getToolCalls(message);
+          if (message.getType() === "ai") {
+            const toolCalls = stream.getToolCalls(message as any);
             const messageSubagents = message.id
               ? stream.getSubagentsByMessage(message.id)
               : [];
