@@ -101,6 +101,8 @@ This demo shows how custom auth integrates with the agent server:
 
 The key insight: you write one auth handler and it applies to **all** agent server endpoints — threads, runs, assistants, and your custom routes.
 
+> **Note:** This demo uses a local SQLite database for user storage, which works for local development and dev deployments (single container, no autoscaling). For production deployments with autoscaling, you should use a proper auth provider like [Supabase](https://supabase.com/), [Auth0](https://auth0.com/), or [Clerk](https://clerk.com/) — the container filesystem is ephemeral and not shared across replicas.
+
 ## Customization
 
 ### Swapping the Agent
