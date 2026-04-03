@@ -91,7 +91,7 @@ const SubagentCard: FC<{
   }, [displayContent, isStreaming]);
 
   return (
-    <div className="anim-fade-in overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-sm">
+    <div className="anim-fade-in overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
       <button
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-[var(--muted)]/30"

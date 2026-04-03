@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { APP_DESCRIPTION, APP_NAME } from "./constants";
 import MessageList from "./components/MessageList";
 import FilesPanel from "./components/FilePanels";
 import ThreadPicker from "./components/ThreadPicker";
 import TodosPanel from "./components/TodosPanel";
-import { useAgentStream } from "./lib/stream";
-import Auth, { type AuthSession } from "./Auth";
+import { useAgentStream, getErrorMessage } from "./lib/stream";
+import Auth from "./Auth";
 import SettingsModal from "./components/SettingsModal";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 
 function AppHeader({
   session,
@@ -16,7 +18,7 @@ function AppHeader({
   onOpenSettings,
   onSignOut,
 }: {
-  session: AuthSession;
+  session: Session;
   threadId: string | null;
   onResetThread: () => void;
   onSelectThread: (threadId: string | null) => void;
@@ -79,14 +81,14 @@ function AppHeader({
         <ThreadPicker
           currentThreadId={threadId}
           onSelect={onSelectThread}
-          accessToken={session.token}
+          accessToken={session.access_token}
         />
       </div>
     </header>
   );
 }
 
-function AuthenticatedApp({ session, onSignOut }: { session: AuthSession; onSignOut: () => void }) {
+function AuthenticatedApp({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const [input, setInput] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
   const [assistantId, setAssistantId] = useState<string>(
@@ -107,6 +109,11 @@ function AuthenticatedApp({ session, onSignOut }: { session: AuthSession; onSign
     [],
   );
 
+  const defaultHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${session.access_token}` }),
+    [session.access_token],
+  );
+
   const stream = useAgentStream({
     apiUrl: window.location.origin,
     assistantId,
@@ -114,9 +121,7 @@ function AuthenticatedApp({ session, onSignOut }: { session: AuthSession; onSign
     threadId,
     onThreadId: setThreadId,
     filterSubagentMessages: true,
-    defaultHeaders: {
-      Authorization: `Bearer ${session.token}`,
-    },
+    defaultHeaders,
   });
 
   const { messages, isLoading, error, values } = stream;
@@ -297,27 +302,84 @@ function AuthenticatedApp({ session, onSignOut }: { session: AuthSession; onSign
 }
 
 export default function App() {
-  const [session, setSession] = useState<AuthSession | null>(() => {
-    const token = localStorage.getItem("auth_token");
-    const userStr = localStorage.getItem("auth_user");
-    if (token && userStr) {
-      try {
-        return { token, user: JSON.parse(userStr) };
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const handleSignOut = useCallback(() => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("auth_user");
-    setSession(null);
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let isActive = true;
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!isActive) return;
+        setSession(data.session);
+        setAuthLoading(false);
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        setAuthError(getErrorMessage(error, "Failed to load authentication state."));
+        setAuthLoading(false);
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!isActive) return;
+      setSession(nextSession);
+      setAuthLoading(false);
+      setAuthError(null);
+    });
+
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
+  const handleSignOut = useCallback(() => {
+    void supabase?.auth.signOut();
+  }, []);
+
+  if (supabaseConfigError) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-[var(--background)]">
+        <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-md sm:p-8 text-center">
+          <h2 className="text-lg font-semibold">Missing configuration</h2>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            Copy <code>frontend/.env.example</code> to <code>frontend/.env</code> and set your Supabase credentials.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-[var(--background)]">
+        <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-md sm:p-8 text-center">
+          <h2 className="text-lg font-semibold">Authentication unavailable</h2>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">{authError}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-[var(--background)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
+      </div>
+    );
+  }
+
   if (!session) {
-    return <Auth onAuth={setSession} />;
+    return <Auth />;
   }
 
   return <AuthenticatedApp session={session} onSignOut={handleSignOut} />;

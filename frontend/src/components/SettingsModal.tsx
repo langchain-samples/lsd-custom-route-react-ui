@@ -1,4 +1,4 @@
-import { useState, type FC } from "react";
+import { useEffect, useState, type FC } from "react";
 import { createPortal } from "react-dom";
 
 const DEFAULT_ASSISTANT_ID = "agent";
@@ -10,6 +10,19 @@ const SettingsModal: FC<{
   onAssistantIdChange: (id: string) => void;
 }> = ({ isOpen, onClose, assistantId, onAssistantIdChange }) => {
   const [draft, setDraft] = useState(assistantId);
+
+  useEffect(() => {
+    if (isOpen) setDraft(assistantId);
+  }, [isOpen, assistantId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -26,7 +39,7 @@ const SettingsModal: FC<{
       onClick={onClose}
     >
       <div
-        className="dialog-content flex w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+        className="dialog-content flex w-full max-w-md flex-col overflow-hidden rounded-xl bg-[var(--surface)] shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
@@ -65,7 +78,7 @@ const SettingsModal: FC<{
                   if (event.key === "Enter") handleSave();
                 }}
                 placeholder={DEFAULT_ASSISTANT_ID}
-                className="flex-1 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+                className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
               />
             </div>
           </div>

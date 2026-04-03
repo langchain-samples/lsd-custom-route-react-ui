@@ -12,7 +12,6 @@ export default defineConfig({
       "/threads": "http://localhost:2024",
       "/runs": "http://localhost:2024",
       "/assistants": "http://localhost:2024",
-      "/auth": "http://localhost:2024",
     },
   },
 });

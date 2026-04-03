@@ -7,6 +7,7 @@ import {
   getTextContent,
 } from "../lib/stream";
 import type { AgentStream } from "../types";
+import type { AIMessage } from "@langchain/langgraph-sdk";
 import { SubagentPipeline, SynthesisIndicator } from "./SubagentActivity";
 import ToolCallCard from "./ToolCallCard";
 
@@ -89,7 +90,7 @@ const MessageList: FC<MessageListProps> = ({
           }
 
           if (message.getType() === "ai") {
-            const toolCalls = stream.getToolCalls(message as any);
+            const toolCalls = stream.getToolCalls(message as AIMessage);
             const messageSubagents = message.id
               ? stream.getSubagentsByMessage(message.id)
               : [];
@@ -151,7 +152,7 @@ const MessageList: FC<MessageListProps> = ({
 
           return (
             <div key={message.id ?? index} className="flex justify-start">
-              <div className="max-w-[90%] rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              <div className="max-w-[90%] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
                 <span className="font-mono">[{message.type}]</span>{" "}
                 {content.slice(0, 300)}
               </div>

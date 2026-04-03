@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FC } from "react";
+import { useCallback, useEffect, useMemo, useState, type FC } from "react";
 import { Client } from "@langchain/langgraph-sdk";
 import { getErrorMessage } from "../lib/stream";
 import type { ThreadSummary } from "../types";
@@ -19,17 +19,22 @@ const ThreadPicker: FC<ThreadPickerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const client = useMemo(
+    () =>
+      new Client({
+        apiUrl: window.location.origin,
+        defaultHeaders: accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
+          : undefined,
+      }),
+    [accessToken],
+  );
+
   const loadThreads = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
 
     try {
-      const client = new Client({
-        apiUrl: window.location.origin,
-        defaultHeaders: accessToken
-          ? { Authorization: `Bearer ${accessToken}` }
-          : undefined,
-      });
       const result = await client.threads.search<ThreadSummary["values"]>({
         limit: 20,
       });
@@ -39,12 +44,21 @@ const ThreadPicker: FC<ThreadPickerProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken]);
+  }, [client]);
 
   useEffect(() => {
     if (!open) return;
     void loadThreads();
   }, [loadThreads, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
 
   return (
     <div className="relative">
@@ -70,7 +84,7 @@ const ThreadPicker: FC<ThreadPickerProps> = ({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="anim-slide-down absolute right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-white shadow-lg sm:w-72">
+          <div className="anim-slide-down absolute right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg sm:w-72">
             <div className="border-b border-[var(--border)] px-3 py-2">
               <button
                 onClick={() => {

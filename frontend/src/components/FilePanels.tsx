@@ -1,4 +1,4 @@
-import { useCallback, useState, type FC } from "react";
+import { useCallback, useEffect, useState, type FC } from "react";
 import { createPortal } from "react-dom";
 import { Streamdown } from "streamdown";
 import { extOf, parseDisplayContent } from "../lib/stream";
@@ -12,6 +12,14 @@ const FileViewDialog: FC<{
   const extension = extOf(fileName);
   const isMarkdown = ["md", "markdown"].includes(extension);
   const isHtml = ["html", "htm"].includes(extension);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const handleCopy = useCallback(() => {
     void navigator.clipboard.writeText(content);
@@ -34,7 +42,7 @@ const FileViewDialog: FC<{
       onClick={onClose}
     >
       <div
-        className="dialog-content flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+        className="dialog-content flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-[var(--surface)] shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
@@ -110,7 +118,7 @@ const FilesPanel: FC<{ files: Record<string, unknown> }> = ({ files }) => {
             <button
               key={name}
               onClick={() => setSelectedFile(name)}
-              className="flex flex-col items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-3 py-3 text-center transition-colors hover:bg-[var(--muted)]"
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-center transition-colors hover:bg-[var(--muted)]"
             >
               <svg className="h-6 w-6 text-[var(--muted-foreground)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />

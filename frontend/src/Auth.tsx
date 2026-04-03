@@ -1,42 +1,40 @@
 import { useState } from "react";
 import { APP_NAME } from "./constants";
 import { getErrorMessage } from "./lib/stream";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 
 type Mode = "login" | "signup";
 
-export interface AuthSession {
-  token: string;
-  user: { id: string; email: string };
-}
-
-export default function Auth({ onAuth }: { onAuth: (session: AuthSession) => void }) {
+export default function Auth() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) {
+      setError(supabaseConfigError ?? "Supabase is not configured.");
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     try {
-      const endpoint = mode === "signup" ? "/auth/signup" : "/auth/login";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Authentication failed.");
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setConfirmationSent(true);
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
       }
-
-      localStorage.setItem("auth_token", data.token);
-      localStorage.setItem("auth_user", JSON.stringify(data.user));
-      onAuth(data);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -44,9 +42,54 @@ export default function Auth({ onAuth }: { onAuth: (session: AuthSession) => voi
     }
   };
 
+  if (supabaseConfigError) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-[var(--background)]">
+        <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-md sm:p-8 text-center">
+          <h2 className="text-lg font-semibold">Missing configuration</h2>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            Copy <code>frontend/.env.example</code> to <code>frontend/.env</code> and set your Supabase credentials.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (confirmationSent) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-[var(--background)]">
+        <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-md sm:p-8 text-center">
+          <svg
+            className="mx-auto h-12 w-12 text-emerald-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
+          <h2 className="mt-4 text-lg font-semibold">Check your email</h2>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            We sent a confirmation link to <strong>{email}</strong>. Click it to
+            activate your account, then come back and sign in.
+          </p>
+          <button
+            onClick={() => {
+              setConfirmationSent(false);
+              setMode("login");
+            }}
+            className="mt-6 w-full rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90"
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-dvh items-center justify-center bg-[var(--background)]">
-      <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-white p-5 shadow-md sm:p-8">
+      <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-md sm:p-8">
         <div className="flex justify-center mb-4">
           <svg className="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5">
             <path d="M12 2L2 12l10 10 10-10L12 2z" />

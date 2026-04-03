@@ -68,7 +68,7 @@ const ToolCallCard: FC<{ toolCall: AgentToolCallResult }> = ({ toolCall }) => {
   const hasToolIcon = getToolIcon(toolCall.call.name) !== null;
 
   return (
-    <div className="anim-fade-in max-w-[90%] overflow-hidden rounded-xl border border-[var(--border)] bg-white text-xs">
+    <div className="anim-fade-in max-w-[90%] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] text-xs">
       <button
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--muted)]/30"

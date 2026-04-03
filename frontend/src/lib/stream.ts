@@ -43,6 +43,8 @@ function getImageUrl(block: {
 export function useAgentStream(
   options: UseDeepAgentStreamOptions<AgentState>,
 ): UseStream<AgentState> {
+  // UseDeepAgentStreamOptions extends UseStreamOptions with subagent support,
+  // but the return type is the same UseStream shape at runtime.
   return useStream<AgentState>(options) as unknown as UseStream<AgentState>;
 }
 

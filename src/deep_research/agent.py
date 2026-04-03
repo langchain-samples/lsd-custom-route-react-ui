@@ -48,8 +48,8 @@ research_sub_agent = {
     "tools": [web_search_tool, think_tool],
 }
 
-# Model Claude Sonnet 4.6
-model = init_chat_model(model="anthropic:claude-haiku-4-5")
+# Model Claude Haiku 4.5
+model = init_chat_model(model="anthropic:claude-sonnet-4-6")
 
 # Create the agent
 agent = create_deep_agent(
