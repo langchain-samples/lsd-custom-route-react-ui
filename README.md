@@ -7,7 +7,7 @@ This project pairs a React chat UI with a LangGraph deep research agent, all dep
 ## What This Demonstrates
 
 - **Custom HTTP routes** — FastAPI app mounted alongside the agent server, serving a frontend at `/app/`
-- **Custom auth** — Local SQLite + JWT authentication integrated with LangGraph's auth system to scope resources per user
+- **Custom auth** — Supabase authentication integrated with LangGraph's auth system to scope resources per user
 - **Deep agent with subagents** — streaming research agent that delegates to parallel subagents
 - **Frontend consuming the agent server** — the React app talks directly to the same origin's `/threads`, `/runs`, and `/assistants` endpoints
 
@@ -31,8 +31,8 @@ LangSmith Deployments run a LangGraph agent server that exposes endpoints for ma
 ```
 
 In this demo:
-- `src/app.py` serves the built React frontend as static files at `/app/` and provides `/auth/signup` and `/auth/login` endpoints
-- `src/auth.py` validates local JWT tokens and scopes all LangGraph resources (threads, runs) to the authenticated user
+- `src/app.py` serves the built React frontend as static files at `/app/` and provides a health check endpoint
+- `src/auth.py` validates Supabase JWT tokens and scopes all LangGraph resources (threads, runs) to the authenticated user
 - The frontend calls the standard agent server endpoints (`/threads`, `/runs`, `/assistants`) — no custom API needed for the chat itself
 
 ## Prerequisites
@@ -40,7 +40,7 @@ In this demo:
 - **Python 3.11+**
 - **Node.js 24+** (LTS)
 - **[uv](https://docs.astral.sh/uv/)** — Python package manager
-- **API keys**: [Anthropic](https://console.anthropic.com/)
+- **API keys**: [Anthropic](https://console.anthropic.com/), [Supabase](https://supabase.com/) project
 
 ## Getting Started
 
@@ -62,7 +62,8 @@ cp .env.example .env
 | Variable | Description |
 |----------|-------------|
 | `ANTHROPIC_API_KEY` | Your Anthropic API key |
-| `JWT_SECRET` | Secret key for signing JWT tokens (change from default in production) |
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Your Supabase anon/public key |
 | `LANGSMITH_API_KEY` | *(optional)* Enable LangSmith tracing |
 | `LANGSMITH_PROJECT` | *(optional)* LangSmith project name |
 | `LANGSMITH_TRACING` | *(optional)* Set to `true` to enable tracing |
@@ -92,16 +93,14 @@ Open **http://localhost:2024/app/**
 
 This demo shows how custom auth integrates with the agent server:
 
-1. User signs up or signs in via the frontend login form
-2. The backend creates/validates credentials against a local SQLite database and returns a JWT
-3. The frontend sends the JWT as `Authorization: Bearer <token>` with every request
-4. `src/auth.py` validates the JWT and extracts the user identity
+1. User signs up or signs in via the frontend using Supabase's client SDK
+2. Supabase handles account creation, login, and issues a JWT access token
+3. The frontend sends the token as `Authorization: Bearer <token>` with every request to the deployment
+4. `src/auth.py` validates the token against Supabase's `/auth/v1/user` endpoint and extracts the user identity
 5. LangGraph resources (threads, runs) are automatically scoped to the authenticated user via metadata filters
 6. Users can only access their own conversations
 
-The key insight: you write one auth handler and it applies to **all** agent server endpoints — threads, runs, assistants, and your custom routes.
-
-> **Note:** This demo uses a local SQLite database for user storage, which works for local development and dev deployments (single container, no autoscaling). For production deployments with autoscaling, you should use a proper auth provider like [Supabase](https://supabase.com/), [Auth0](https://auth0.com/), or [Clerk](https://clerk.com/) — the container filesystem is ephemeral and not shared across replicas.
+The key insight: you write one auth handler and it applies to **all** agent server endpoints — threads, runs, assistants, and your custom routes. We use Supabase here, but you could validate tokens from any provider — Auth0, Clerk, or your own auth server.
 
 ## Customization
 
@@ -119,7 +118,7 @@ Colors are CSS custom properties in `frontend/src/index.css` — change `--accen
 ├── langgraph.json                     # Deployment config (graphs, auth, http, env)
 ├── src/
 │   ├── app.py                         # Custom HTTP routes (serves frontend + auth endpoints)
-│   ├── auth.py                        # Custom auth (local SQLite + JWT validation)
+│   ├── auth.py                        # Custom auth (Supabase JWT validation)
 │   └── deep_research/
 │       ├── agent.py                   # Deep research agent definition
 │       └── research_agent/
@@ -128,7 +127,7 @@ Colors are CSS custom properties in `frontend/src/index.css` — change `--accen
 │
 ├── frontend/src/
 │   ├── App.tsx                        # Main app with auth + streaming
-│   ├── Auth.tsx                       # Local sign in/up
+│   ├── Auth.tsx                       # Supabase sign in/up
 │   └── components/
 │       ├── MessageList.tsx            # Chat messages
 │       ├── ToolCallCard.tsx           # Tool call display with rich renderers
@@ -147,7 +146,7 @@ Colors are CSS custom properties in `frontend/src/index.css` — change `--accen
 | Server | LangSmith Deployments agent server, FastAPI (custom routes) |
 | Frontend | React 19, TypeScript, Vite 6, Tailwind CSS v4 |
 | Streaming | `@langchain/react`, `streamdown` |
-| Auth | Local SQLite + JWT (frontend + backend validation) |
+| Auth | Supabase (frontend SDK + backend token validation) |
 
 ## License
 
