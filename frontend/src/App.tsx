@@ -1,27 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { APP_DESCRIPTION, APP_NAME } from "./constants";
-import MessageList from "./components/MessageList";
-import FilesPanel from "./components/FilePanels";
-import ThreadPicker from "./components/ThreadPicker";
-import TodosPanel from "./components/TodosPanel";
-import { useAgentStream, getErrorMessage } from "./lib/stream";
+import { getErrorMessage } from "./lib/format";
 import Auth from "./Auth";
 import SettingsModal from "./components/SettingsModal";
+import { Composer, ThreadView } from "./components/Thread";
+import ThreadPicker from "./components/ThreadPicker";
+import TodosPanel from "./components/TodosPanel";
+import FilesPanel from "./components/FilePanels";
+import {
+  RuntimeProvider,
+  useGraphValues,
+  useThreadActions,
+} from "./RuntimeProvider";
 import { supabase, supabaseConfigError } from "./supabaseClient";
 
 function AppHeader({
   session,
-  threadId,
-  onResetThread,
+  currentThreadId,
   onSelectThread,
+  onNewThread,
   onOpenSettings,
   onSignOut,
 }: {
   session: Session;
-  threadId: string | null;
-  onResetThread: () => void;
-  onSelectThread: (threadId: string | null) => void;
+  currentThreadId: string | null;
+  onSelectThread: (id: string | null) => void;
+  onNewThread: () => void;
   onOpenSettings: () => void;
   onSignOut: () => void;
 }) {
@@ -69,7 +74,7 @@ function AppHeader({
           </svg>
         </button>
         <button
-          onClick={onResetThread}
+          onClick={onNewThread}
           className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] p-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent-bg)] sm:px-3 sm:py-1.5"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -79,119 +84,52 @@ function AppHeader({
           <span className="hidden sm:inline">New</span>
         </button>
         <ThreadPicker
-          currentThreadId={threadId}
-          onSelect={onSelectThread}
           accessToken={session.access_token}
+          currentThreadId={currentThreadId}
+          onSelect={onSelectThread}
         />
       </div>
     </header>
   );
 }
 
-function AuthenticatedApp({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
-  const [input, setInput] = useState("");
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [assistantId, setAssistantId] = useState<string>(
-    () => localStorage.getItem("settings:assistantId") || "agent",
-  );
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const mainRef = useRef<HTMLDivElement | null>(null);
-  const isNearBottom = useRef(true);
-  const rafId = useRef(0);
-
-  const handleAssistantIdChange = useCallback(
-    (id: string) => {
-      setAssistantId(id);
-      localStorage.setItem("settings:assistantId", id);
-      setThreadId(null);
-    },
-    [],
-  );
-
-  const defaultHeaders = useMemo(
-    () => ({ Authorization: `Bearer ${session.access_token}` }),
-    [session.access_token],
-  );
-
-  const stream = useAgentStream({
-    apiUrl: window.location.origin,
-    assistantId,
-    messagesKey: "messages",
-    threadId,
-    onThreadId: setThreadId,
-    filterSubagentMessages: true,
-    defaultHeaders,
-  });
-
-  const { messages, isLoading, error, values } = stream;
-  const files = values.files ?? {};
-  const todos = values.todos ?? [];
+function ChatLayout({
+  session,
+  onOpenSettings,
+  onSignOut,
+}: {
+  session: Session;
+  onOpenSettings: () => void;
+  onSignOut: () => void;
+}) {
+  const { todos, files } = useGraphValues();
+  const { currentExternalId, switchToExistingThread, newThread } =
+    useThreadActions();
   const [showTodos, setShowTodos] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
-  const todoCount = todos.length;
-  const fileCount = Object.keys(files).length;
 
-  const handleScroll = useCallback(() => {
-    const element = mainRef.current;
-    if (!element) return;
-    isNearBottom.current =
-      element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-  }, []);
+  const handleSelectThread = useCallback(
+    (id: string | null) => {
+      if (id === null) newThread();
+      else switchToExistingThread(id);
+    },
+    [newThread, switchToExistingThread],
+  );
 
-  useEffect(() => {
-    if (!isNearBottom.current) return;
-
-    cancelAnimationFrame(rafId.current);
-    rafId.current = requestAnimationFrame(() => {
-      const element = mainRef.current;
-      if (element) element.scrollTop = element.scrollHeight;
-    });
-  }, [messages]);
-
-  useEffect(() => () => cancelAnimationFrame(rafId.current), []);
-
-  const submitInput = useCallback(async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
-
-    setInput("");
-    await stream.submit(
-      { messages: [{ type: "human", content: text }] },
-      { streamSubgraphs: true },
-    );
-  }, [input, isLoading, stream]);
+  const fileCount = useMemo(() => Object.keys(files).length, [files]);
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--background)]">
       <AppHeader
         session={session}
-        threadId={threadId}
-        onResetThread={() => setThreadId(null)}
-        onSelectThread={setThreadId}
-        onOpenSettings={() => setSettingsOpen(true)}
+        currentThreadId={currentExternalId}
+        onSelectThread={handleSelectThread}
+        onNewThread={newThread}
+        onOpenSettings={onOpenSettings}
         onSignOut={onSignOut}
       />
-
-      <SettingsModal
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        assistantId={assistantId}
-        onAssistantIdChange={handleAssistantIdChange}
-      />
-
-      <MessageList
-        bottomRef={bottomRef}
-        error={error}
-        isLoading={isLoading}
-        mainRef={mainRef}
-        messages={messages}
-        onScroll={handleScroll}
-        onSuggestionSelect={setInput}
-        stream={stream}
-      />
-
-      {showTodos && todoCount > 0 && (
+      <ThreadView />
+      {showTodos && todos.length > 0 && (
         <div className="border-t border-[var(--border)]">
           <TodosPanel todos={todos} />
         </div>
@@ -201,103 +139,43 @@ function AuthenticatedApp({ session, onSignOut }: { session: Session; onSignOut:
           <FilesPanel files={files} />
         </div>
       )}
-
-      <footer className="bg-[var(--background)] px-2 py-3 sm:px-4 sm:py-4">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitInput();
-          }}
-          className="mx-auto max-w-4xl"
-        >
-          <div className="composer">
-            <textarea
-              value={input}
-              onChange={(event) => {
-                setInput(event.target.value);
-                event.target.style.height = "auto";
-                event.target.style.height = `${Math.min(event.target.scrollHeight, 200)}px`;
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void submitInput();
-                }
-              }}
-              placeholder="Send a message..."
-              rows={1}
-              autoFocus
-              className="min-h-[44px] max-h-[200px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-[var(--muted-foreground)]"
-            />
-            <div className="flex items-center justify-between px-4 pb-3">
-              <div className="flex items-center gap-1.5">
-                {todoCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTodos((v) => !v)}
-                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                      showTodos
-                        ? "bg-[var(--accent-bg)] text-[var(--foreground)]"
-                        : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
-                    }`}
-                  >
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 20h9" />
-                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838.838-2.872a2 2 0 0 1 .506-.855z" />
-                    </svg>
-                    Tasks
-                    <span className="rounded-full bg-[var(--primary)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--primary-foreground)]">
-                      {todoCount}
-                    </span>
-                  </button>
-                )}
-                {fileCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFiles((v) => !v)}
-                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                      showFiles
-                        ? "bg-[var(--accent-bg)] text-[var(--foreground)]"
-                        : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
-                    }`}
-                  >
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-                      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-                    </svg>
-                    Files
-                    <span className="rounded-full bg-[var(--primary)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--primary-foreground)]">
-                      {fileCount}
-                    </span>
-                  </button>
-                )}
-              </div>
-              <button
-                type={isLoading ? "button" : "submit"}
-                onClick={isLoading ? () => void stream.stop() : undefined}
-                disabled={!isLoading && !input.trim()}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all disabled:opacity-30 ${
-                  isLoading
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent-hover)]"
-                }`}
-              >
-                {isLoading ? (
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="1" />
-                  </svg>
-                ) : (
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m5 12 7-7 7 7" />
-                    <path d="M12 19V5" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
-        </form>
-      </footer>
+      <Composer
+        todoCount={todos.length}
+        fileCount={fileCount}
+        showTodos={showTodos}
+        showFiles={showFiles}
+        onToggleTodos={() => setShowTodos((v) => !v)}
+        onToggleFiles={() => setShowFiles((v) => !v)}
+      />
     </div>
+  );
+}
+
+function AuthenticatedApp({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
+  const [assistantId, setAssistantId] = useState<string>(
+    () => localStorage.getItem("settings:assistantId") || "agent",
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const handleAssistantIdChange = useCallback((id: string) => {
+    setAssistantId(id);
+    localStorage.setItem("settings:assistantId", id);
+  }, []);
+
+  return (
+    <RuntimeProvider session={session} assistantId={assistantId}>
+      <ChatLayout
+        session={session}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onSignOut={onSignOut}
+      />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        assistantId={assistantId}
+        onAssistantIdChange={handleAssistantIdChange}
+      />
+    </RuntimeProvider>
   );
 }
 

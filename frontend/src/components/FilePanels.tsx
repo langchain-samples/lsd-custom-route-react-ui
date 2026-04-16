@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FC } from "react";
 import { createPortal } from "react-dom";
 import { Streamdown } from "streamdown";
-import { extOf, parseDisplayContent } from "../lib/stream";
+import { extOf, parseDisplayContent } from "../lib/format";
 
 const FileViewDialog: FC<{
   fileName: string;
