@@ -10,9 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@langchain/core": "^1.1.24",
+    "@assistant-ui/react": "^0.12.25",
+    "@assistant-ui/react-langgraph": "^0.13.10",
+    "@assistant-ui/react-streamdown": "^0.1.10",
     "@langchain/langgraph-sdk": "^1.7.2",
-    "@langchain/react": "^0.2.1",
     "@supabase/supabase-js": "^2.99.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
