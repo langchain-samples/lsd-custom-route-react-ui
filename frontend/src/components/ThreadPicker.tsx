@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FC } from "react";
-import { Client } from "@langchain/langgraph-sdk";
-import { getErrorMessage } from "../lib/stream";
-import type { ThreadSummary } from "../types";
+import { Client, type Thread } from "@langchain/langgraph-sdk";
+import { getErrorMessage } from "../lib/format";
+
+type ThreadSummary = Thread<Record<string, unknown>>;
 
 type ThreadPickerProps = {
   currentThreadId: string | null;

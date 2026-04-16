@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { APP_NAME } from "./constants";
-import { getErrorMessage } from "./lib/stream";
+import { getErrorMessage } from "./lib/format";
 import { supabase, supabaseConfigError } from "./supabaseClient";
 
 type Mode = "login" | "signup";
